@@ -9,7 +9,8 @@
 #include "Point.h"
 #include "Cluster.h"
 
-#define FILE_PATH "C:\\Users\\sean9\\source\\repos\\Parallel Final\\testCreator\\newTest.txt"//C:/Users/sean9/Desktop/newTest (2) (1).txt"//"C:/Users/sean9/Desktop/newTest (2).txt"
+#define RESULT_TAG 0
+#define FILE_PATH "C:\\Users\\sean9\\source\\repos\\Parallel Final\\testCreator\\newTest.txt" //C:/Users/sean9/Desktop/newTest (2) (1).txt"//"C:/Users/sean9/Desktop/newTest (2).txt"
 void printTime(cluster_t clusters[], int k);
 
 extern int cudaKmeanIteration(cluster_t clusters[], int k, point_t points[], int pointToCluster[], int n);
@@ -199,35 +200,17 @@ cluster_t* kMeans(int n, int k, int limit, point_t p[])
 void findFirstGoodCluster(int rank, int numprocs, int n, int k, int limit, double qm, double start, double t, double dt, point_t p[])
 {
 	double result[3] = { INFINITY, INFINITY, INFINITY };
+	MPI_Request request;
+	MPI_Status status;
+	int flag;
+	double timeRec;
+	MPI_Irecv(&timeRec, 1, MPI_DOUBLE, MPI_ANY_SOURCE, RESULT_TAG, MPI_COMM_WORLD, &request);
 	double curTime = start;
 	int succ = 0;
 	double minTime = 0, minQuality = INFINITY;
 
-	//double delta = 0;
-	//cluster_t* myClusters;
-	//for (int i = 0; i < n; i++)
-	//{
-	//	p[i].location.x += (102.764046) * p[i].speed.x;
-	//	p[i].location.y += (102.764046) * p[i].speed.y;
-	//	p[i].location.z += (102.764046) * p[i].speed.z;
-	//}
-	//for (int i = 0; i < 100; i++)
-	//{
-	//	double q1, q2;
-
-	//	myClusters = kMeans(n, k, limit, p);
-	//	q1 = quality(myClusters, k);
-
-	//	myClusters = CudaKMeans(n, k, limit, p, &q2);
-	//	delta = fmax(delta, fabs(q1 - q2));
-	//	printf_s("%d) %lf\n", i, delta);
-	//}
-
 	omp_set_nested(1);
 	omp_set_dynamic(1);
-
-	cluster_t* c1;
-	cluster_t* c2;
 	#pragma omp parallel num_threads(2)
 	{
 		int tid = omp_get_thread_num();
@@ -235,8 +218,18 @@ void findFirstGoodCluster(int rank, int numprocs, int n, int k, int limit, doubl
 		cluster_t* myClusters;
 		double myTime;
 
-		while (curTime <= t && !succ)
+		while (curTime <= t && curTime < result[2] && !succ)
 		{
+			#pragma omp master
+			{
+				MPI_Test(&request, &flag, &status);
+				if (flag)
+				{
+					printf_s("*****rank %d recived from %d) data = %lf\n", rank, status.MPI_SOURCE, timeRec);
+					result[2] = fmin(result[2], timeRec);
+					MPI_Irecv(&timeRec, 1, MPI_DOUBLE, MPI_ANY_SOURCE, RESULT_TAG, MPI_COMM_WORLD, &request);
+				}
+			}
 			#pragma omp critical
 			{
 				myTime = curTime;
@@ -258,17 +251,9 @@ void findFirstGoodCluster(int rank, int numprocs, int n, int k, int limit, doubl
 			{
 				cudaAddPoints(myPoints, p, n, myTime - start);
 				myClusters = CudaKMeans(n, k, limit, myPoints, &q);
-			}/*
+			}
 
-			double q;
-			#pragma omp critical
-			{
-				if (tid == 0)
-					myClusters = kMeans(n, k, limit, myPoints);
-				q = quality(myClusters, k);
-			}*/
-
-			printf_s("rank = %d, thread = %d, time = %lf, quality = %lf\n", rank, omp_get_thread_num(), myTime, q);
+			printf_s("rank = %d, thread = %d, time = %lf, quality = %lf\n", rank, tid, myTime, q);
 
 			if (q < minQuality)
 			{
@@ -291,6 +276,23 @@ void findFirstGoodCluster(int rank, int numprocs, int n, int k, int limit, doubl
 		}
 	}
 	double bestResult = fmin(result[0], fmin(result[1], result[2]));
+	for (int i = 0; i < numprocs; i++)
+	{
+		if (i != rank)
+			MPI_Isend(&bestResult, 1, MPI_DOUBLE, i, RESULT_TAG, MPI_COMM_WORLD, &request);
+	}
+	
+	//if (rank != 0)
+	//	MPI_Send(&bestResult, 1, MPI_DOUBLE, 0, FINISH_TAG, MPI_COMM_WORLD);
+	//else
+	//{
+	//	int tmp;
+	//	for (int i = 1; i < numprocs; i++)
+	//	{
+	//		MPI_Recv(&tmp, 1, MPI_DOUBLE, i, FINISH_TAG, MPI_COMM_WORLD, &status);
+	//		bestResult = fmin(bestResult, tmp);
+	//	}
+	//}
 
 	printf_s("rank %d: %lf\n", rank, bestResult);
 	double* bestResults = (double*)calloc(numprocs, sizeof(double));
@@ -304,9 +306,8 @@ void findFirstGoodCluster(int rank, int numprocs, int n, int k, int limit, doubl
 			bestResult = fmin(bestResult, bestResults[i]);
 			printf_s("best result[%d]=%lf\n", i, bestResults[i]);
 		}
-	}
-	if (rank==0)
 		printf_s("time is %lf", bestResult);
+	}
 }
 
 void Bcast(int rank, int* n, int* k, int* limit, double* qm, double* t, double* dt, point_t** p)

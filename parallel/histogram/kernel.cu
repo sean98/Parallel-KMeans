@@ -186,7 +186,7 @@ cluster_t* CudaKMeans(int n, int k, int limit, point_t h_points[], double* h_qau
 	cudaMalloc(&d_maxDist, n * sizeof(double));
 
 	//isSame
-	int one = 1;
+	const int one = 1;
 	int *d_isSame, h_isSame = 0;
 	cudaMalloc(&d_isSame, sizeof(int));
 	cudaMemcpy(d_isSame, &one, sizeof(int), cudaMemcpyHostToDevice);
