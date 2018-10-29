@@ -1,0 +1,5 @@
+﻿  Main.cpp
+c:\users\sean9\desktop\boris hw3\histogram\main.cpp(229): warning C4101: 'c1': unreferenced local variable
+c:\users\sean9\desktop\boris hw3\histogram\main.cpp(230): warning C4101: 'c2': unreferenced local variable
+  histogram.vcxproj -> C:\Users\sean9\Desktop\boris HW3\x64\Debug\histogram.exe
+  histogram.vcxproj -> C:\Users\sean9\Desktop\boris HW3\x64\Debug\histogram.pdb (Full PDB)
