@@ -1,8 +1,7 @@
-//Lior Itzhak	203679816
-//Sean Goldfarb	209320977
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "device_functions.h"
+#include <omp.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,10 +51,10 @@ __global__ void initPointInCluster(int globalPointInCluster[], int k)
 		globalPointInCluster[i] = 0;
 }
 
-__global__ void resetClusters(cluster_t clusters[], int k)
+__global__ void resetClusters(cluster_t clusters[], int pointInCluster[], int k)
 {
 	int i = getId();
-	if (i < k)
+	if (i < k && pointInCluster[i]>0)
 	{
 		clusters[i].location.x = 0;
 		clusters[i].location.y = 0;
@@ -77,7 +76,7 @@ __global__ void addPointsToCluster(cluster_t clusters[], point_t points[], int p
 __global__ void avrageClusters(cluster_t clusters[], int pointsInCluster[], int k)
 {
 	int i = getId();
-	if (i < k)
+	if (i < k && pointsInCluster[i]>0)
 	{
 		clusters[i].location.x /= pointsInCluster[i];
 		clusters[i].location.y /= pointsInCluster[i];
@@ -86,7 +85,7 @@ __global__ void avrageClusters(cluster_t clusters[], int pointsInCluster[], int 
 	}
 }
 
-__global__ void kMeansIteration(cluster_t clusters[], int globalPointInCluster[], int k, point_t points[], int pointToCluster[], int n, int* isSame)
+__global__ void kMeansIteration(cluster_t clusters[], int pointInCluster[], int k, point_t points[], int pointToCluster[], int n, int* isSame)
 {
 	int i = getId();
 	if (i < n)
@@ -103,7 +102,7 @@ __global__ void kMeansIteration(cluster_t clusters[], int globalPointInCluster[]
 			*isSame = 0;
 			pointToCluster[i] = minIndex;
 		}
-		atomicAdd(&globalPointInCluster[minIndex], 1);
+		atomicAdd(&pointInCluster[minIndex], 1);
 	}
 }
 
@@ -124,6 +123,8 @@ __global__ void cudaAddPointsParallel(point_t points[], int n, double dt)
 		points[i].location.x += dt * points[i].speed.x;
 		points[i].location.y += dt * points[i].speed.y;
 		points[i].location.z += dt * points[i].speed.z;
+		//points[i].location.squared = pow(points[i].location.x, 2) + pow(points[i].location.y, 2) + pow(points[i].location.z, 2);
+		//points[i].location.dist = sqrt(points[i].location.squared);
 	}
 }
 
@@ -143,6 +144,9 @@ __global__ void cudaQuality(point_t points[], int pointToCluster[], double maxDi
 		}
 	}
 }
+
+
+
 
 void cudaAddPoints(point_t h_dstPoints[], point_t h_srcPoints[], int n, double dt)
 {
@@ -197,7 +201,7 @@ cluster_t* CudaKMeans(int n, int k, int limit, point_t h_points[], double* h_qau
 		cudaMemcpy(d_isSame, &one, sizeof(int), cudaMemcpyHostToDevice);
 		
 		kMeansIteration <<<n/1024 + 1, 1024 >> > (d_clusters, d_pointsInCluster, k, d_points, d_pointToCluster, n, d_isSame);
-		resetClusters <<<1, k >> > (d_clusters, k);
+		resetClusters <<<1, k >>> (d_clusters, d_pointsInCluster, k);
 		addPointsToCluster<<<n / 1024 + 1, 1024>>>(d_clusters, d_points, d_pointToCluster, n);
 		avrageClusters<<<1, k>>>(d_clusters, d_pointsInCluster, k);
 		
@@ -229,13 +233,6 @@ cluster_t* CudaKMeans(int n, int k, int limit, point_t h_points[], double* h_qau
 	*h_qaulity /= k * (k - 1);
 	free(radius);
 	free(h_maxDist);
-//
-//	for (int i = 0; i < k; i++)
-//		h_clusters[i].pointsList = NULL;
-////		initArrayList(&h_clusters[i].pointsList, n / k);*/
-//
-//	for (int i = 0; i < n; i++)
-//		addElement(&h_clusters[h_pointToCluster[i]].pointsList, &h_points[i]);
 
 	//maxDist
 	cudaFree(d_maxDist);

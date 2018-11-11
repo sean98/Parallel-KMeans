@@ -10,15 +10,15 @@
 #include "Cluster.h"
 
 #define RESULT_TAG 0
-#define FILE_PATH "C:\\Users\\sean9\\source\\repos\\Parallel Final\\testCreator\\newTest.txt" //C:/Users/sean9/Desktop/newTest (2) (1).txt"//"C:/Users/sean9/Desktop/newTest (2).txt"
-void printTime(cluster_t clusters[], int k);
+#define FILE_PATH "C:/Users/sean9/Desktop/Points/5k.txt"
 
-extern int cudaKmeanIteration(cluster_t clusters[], int k, point_t points[], int pointToCluster[], int n);
+MPI_Datatype MPI_VECTOR;
+
 extern cluster_t* CudaKMeans(int n, int k, int limit, point_t h_points[], double* h_qaulity);
 extern void cudaInit();
 extern void cudaAddPoints(point_t h_dstPoints[], point_t h_srcPoints[], int n, double dt);
 
-void getDataFromFile(const char* path, int* n, int* k, int* limit, double* qm, double* t, double* dt, point_t** p)
+int getDataFromFile(const char* path, int* n, int* k, int* limit, double* qm, double* t, double* dt, point_t** p)
 {
 	FILE* f;
 	fopen_s(&f, path, "r");
@@ -26,7 +26,7 @@ void getDataFromFile(const char* path, int* n, int* k, int* limit, double* qm, d
 	{
 		printf_s("error reading from file");
 		_flushall();
-		return;
+		return 0;
 	}
 
 	fscanf_s(f, "%d %d %lf %lf %d %lf", n, k, t, dt, limit, qm);//, limit, qm, t, dt);
@@ -42,6 +42,7 @@ void getDataFromFile(const char* path, int* n, int* k, int* limit, double* qm, d
 		vectorInit(&temp[i].speed, x, y, z);
 	}
 	fclose(f);
+	return 1;
 }
 
 cluster_t* clustersInit(int k, point_t points[], int n)
@@ -54,8 +55,6 @@ cluster_t* clustersInit(int k, point_t points[], int n)
 	{
 		vectorInit(&clusters[i].location, points[i].location.x, points[i].location.y, points[i].location.z);
 		clusters[i].pointsList = NULL;
-		//initArrayList(&clusters[i].pointsList, n / k);
-		//addElement(&clusters[i].pointsList, &points[i]);
 	}
 	return clusters;
 }
@@ -65,10 +64,7 @@ int kMeansIteration(cluster_t clusters[], int k, point_t points[], int pointToCl
 	vector_t* newLocation = (vector_t*)calloc(k, sizeof(vector_t));
 	#pragma omp parallel for
 	for (int i = 0; i < k; i++)
-	{
 		vectorInit(&newLocation[i], 0, 0, 0);
-		//initArrayList(&clusters->pointsList, n / k);
-	}
 
 	int* pointsInCluster = (int*)calloc(k, sizeof(int));
 	int isSame = 1;
@@ -92,7 +88,6 @@ int kMeansIteration(cluster_t clusters[], int k, point_t points[], int pointToCl
 		}
 		#pragma omp atomic
 		pointsInCluster[pointToCluster[i]]++;
-		//addElement(&clusters[pointToCluster[i]].pointsList, &points[i]);
 		addVector(&newLocation[pointToCluster[i]], points[i].location);
 	}
 	if (isSame)
@@ -100,10 +95,13 @@ int kMeansIteration(cluster_t clusters[], int k, point_t points[], int pointToCl
 
 	#pragma omp parallel for
 	for (int i = 0; i < k; i++) {
-		clusters[i].location = newLocation[i];
-		clusters[i].location.x /= pointsInCluster[i];
-		clusters[i].location.y /= pointsInCluster[i];
-		clusters[i].location.z /= pointsInCluster[i];
+		if (pointsInCluster[i] > 0)
+		{
+			clusters[i].location = newLocation[i];
+			clusters[i].location.x /= pointsInCluster[i];
+			clusters[i].location.y /= pointsInCluster[i];
+			clusters[i].location.z /= pointsInCluster[i];
+		}
 	}
 	free(pointsInCluster);
 	free(newLocation);
@@ -134,7 +132,6 @@ double quality(cluster_t clusters1[], int k)
 			}
 			head = head->next;
 		}
-		//printf_s("cpu %lf\n", sqrt(radius[i]));
 		for (int j = 0; j < k; j++)
 		{
 			if (i == j)
@@ -142,40 +139,9 @@ double quality(cluster_t clusters1[], int k)
 			q += sqrt(radius[i]) / sqrt(distance(clusters1[i].location, clusters1[j].location));
 		}
 	}
-	//for (int i=0;i<k;i++)
-	//	printf_s("%lf with %d points\n", radius[i], pointInCluster[i]);
 	free(radius);
 	return q / (k*(k-1));//((pow(k, 2) + k) / 2);
 }
-
-//void printTime(cluster_t clusters[], int k)
-//{
-//	for (int i = 0; i < k; i++) 
-//	{
-//		printf_s("\t");
-//		printVector(clusters[i].location);
-//		printf_s("\t\n\t{\n");
-//
-//		for (int j = 0; j < clusters->pointsList->logicalSize; j++)
-//		{
-//			printf_s("\t|\t");
-//			printVector(((point_t*)clusters[i].pointsList->data[j])->location);
-//			printf_s("\t\n");
-//		}
-//
-//		/*
-//		node_t* temp = clusters[i].pointsList;
-//		while (temp)
-//		{
-//			printf_s("\t|\t");
-//			printVector(((point_t*)temp->data)->location);
-//			printf_s("\t\n");
-//			temp = temp->next;
-//		}
-//		*/
-//		printf_s("\t}\n\n");
-//	}
-//}
 
 cluster_t* kMeans(int n, int k, int limit, point_t p[])
 {
@@ -185,10 +151,7 @@ cluster_t* kMeans(int n, int k, int limit, point_t p[])
 
 	int isSame = 0;
 	for (int i = 0; i < limit && !isSame; i++)
-	{
 		isSame = kMeansIteration(clusters, k, p, pointToCluster, n);
-		//isSame = cudaKmeanIteration(clusters, k, p, pointToCluster, n);
-	}
 
 	for (int i = 0; i < n; i++)
 		addElement(&clusters[pointToCluster[i]].pointsList, &p[i]);
@@ -197,116 +160,134 @@ cluster_t* kMeans(int n, int k, int limit, point_t p[])
 	return clusters;
 }
 
-void findFirstGoodCluster(int rank, int numprocs, int n, int k, int limit, double qm, double start, double t, double dt, point_t p[])
+void movePoints(point_t p1[], point_t p2[], int n, double delta)
 {
-	double result[3] = { INFINITY, INFINITY, INFINITY };
+	#pragma omp parallel for
+	for (int i = 0; i < n; i++)
+	{
+		p1[i].location.x = p2[i].location.x + delta * p2[i].speed.x;
+		p1[i].location.y = p2[i].location.y + delta * p2[i].speed.y;
+		p1[i].location.z = p2[i].location.z + delta * p2[i].speed.z;
+	}
+}
+
+vector_t* findFirstGoodCluster(int rank, int numprocs, int n, int k, int limit, double qm, double start, double t, double dt, point_t p[])
+{
+	//Recv non blocking message
 	MPI_Request request;
 	MPI_Status status;
 	int flag;
-	double timeRec;
-	MPI_Irecv(&timeRec, 1, MPI_DOUBLE, MPI_ANY_SOURCE, RESULT_TAG, MPI_COMM_WORLD, &request);
+	double timeRecv;
+	MPI_Irecv(&timeRecv, 1, MPI_DOUBLE, MPI_ANY_SOURCE, RESULT_TAG, MPI_COMM_WORLD, &request);
+
+	//create variables for threads
+	double result[3] = { INFINITY, INFINITY, INFINITY };
+	point_t* points[2] = { NULL, NULL };
+	cluster_t* clusters[2] = { NULL, NULL };
+
+
 	double curTime = start;
 	int succ = 0;
-	double minTime = 0, minQuality = INFINITY;
 
 	omp_set_nested(1);
 	omp_set_dynamic(1);
 	#pragma omp parallel num_threads(2)
 	{
-		int tid = omp_get_thread_num();
-		point_t *myPoints = (point_t*)calloc(n, sizeof(point_t));
-		cluster_t* myClusters;
 		double myTime;
+		int tid = omp_get_thread_num();
+		points[tid] = (point_t*)calloc(n, sizeof(point_t));
 
 		while (curTime <= t && curTime < result[2] && !succ)
 		{
-			#pragma omp master
+			if (clusters[tid] != NULL)
 			{
-				MPI_Test(&request, &flag, &status);
-				if (flag)
-				{
-					printf_s("*****rank %d recived from %d) data = %lf\n", rank, status.MPI_SOURCE, timeRec);
-					result[2] = fmin(result[2], timeRec);
-					MPI_Irecv(&timeRec, 1, MPI_DOUBLE, MPI_ANY_SOURCE, RESULT_TAG, MPI_COMM_WORLD, &request);
-				}
+				for (int i = 0; i < k; i++)
+					freeArrayList(&clusters[tid][i].pointsList);
+				free(clusters[tid]);
 			}
+			//each thread takes his time
 			#pragma omp critical
 			{
 				myTime = curTime;
 				curTime += dt;
 			}
+
 			double q;
 			if (tid == 0)//cpu
 			{
-				for (int i = 0; i < n; i++)
-				{
-					myPoints[i].location.x = p[i].location.x + (myTime - start) * p[i].speed.x;
-					myPoints[i].location.y = p[i].location.y + (myTime - start) * p[i].speed.y;
-					myPoints[i].location.z = p[i].location.z + (myTime - start) * p[i].speed.z;
-				}
-				myClusters = kMeans(n, k, limit, myPoints);
-				q = quality(myClusters, k);
+				movePoints(points[tid], p, n, myTime - start);
+				clusters[tid] = kMeans(n, k, limit, points[tid]);
+				q = quality(clusters[tid], k);
 			}
 			else
 			{
-				cudaAddPoints(myPoints, p, n, myTime - start);
-				myClusters = CudaKMeans(n, k, limit, myPoints, &q);
+				cudaAddPoints(points[tid], p, n, myTime - start);
+				clusters[tid] = CudaKMeans(n, k, limit, points[tid], &q);
 			}
 
 			printf_s("rank = %d, thread = %d, time = %lf, quality = %lf\n", rank, tid, myTime, q);
-
-			if (q < minQuality)
-			{
-				minQuality = q;
-				minTime = myTime;
-			}
+			_flushall();
 
 			if (q < qm)
 			{
-				//printf_s("thread %d found cluster at %lf with qaulity %lf\n", omp_get_thread_num(), myTime, q);
 				result[tid] = myTime;
 				succ = 1;
 				break;
 			}
-			//printf_s("thread %d:  time %lf qaulity %lf\n\n", omp_get_thread_num(), myTime, q, curTime);
-			for (int i = 0; i < k; i++)
-				freeArrayList(&myClusters[i].pointsList);
-			free(myClusters);
-			_flushall();
+
+			//check if message recived
+			#pragma omp master
+			{
+				MPI_Test(&request, &flag, &status);
+				if (flag)
+				{
+					printf_s("*****rank %d recived from %d) data = %lf\n", rank, status.MPI_SOURCE, timeRecv);
+					result[2] = fmin(result[2], timeRecv);
+					MPI_Irecv(&timeRecv, 1, MPI_DOUBLE, MPI_ANY_SOURCE, RESULT_TAG, MPI_COMM_WORLD, &request);
+				}
+			}
 		}
 	}
-	double bestResult = fmin(result[0], fmin(result[1], result[2]));
-	for (int i = 0; i < numprocs; i++)
-	{
-		if (i != rank)
-			MPI_Isend(&bestResult, 1, MPI_DOUBLE, i, RESULT_TAG, MPI_COMM_WORLD, &request);
-	}
-	
-	//if (rank != 0)
-	//	MPI_Send(&bestResult, 1, MPI_DOUBLE, 0, FINISH_TAG, MPI_COMM_WORLD);
-	//else
-	//{
-	//	int tmp;
-	//	for (int i = 1; i < numprocs; i++)
-	//	{
-	//		MPI_Recv(&tmp, 1, MPI_DOUBLE, i, FINISH_TAG, MPI_COMM_WORLD, &status);
-	//		bestResult = fmin(bestResult, tmp);
-	//	}
-	//}
+	int minIndex;
+	if (result[0] < result[1])
+		minIndex = 0;
+	else
+		minIndex = 1;
 
-	printf_s("rank %d: %lf\n", rank, bestResult);
-	double* bestResults = (double*)calloc(numprocs, sizeof(double));
-
-	MPI_Gather(&bestResult, 1, MPI_DOUBLE,
-		bestResults, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	if (rank == 0)
+	if (result[minIndex] < result[2])
 	{
 		for (int i = 0; i < numprocs; i++)
 		{
-			bestResult = fmin(bestResult, bestResults[i]);
-			printf_s("best result[%d]=%lf\n", i, bestResults[i]);
+			if (i != rank)
+				MPI_Isend(&result[minIndex], 1, MPI_DOUBLE, i, RESULT_TAG, MPI_COMM_WORLD, &request);
 		}
-		printf_s("time is %lf", bestResult);
+	}
+	printf_s("p[%d] sends %lf\n", rank, result[minIndex]);
+	double* bestResults = (double*)calloc(numprocs, sizeof(double));
+	MPI_Gather(&result[minIndex], 1, MPI_DOUBLE,
+		bestResults, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+	vector_t* centers = (vector_t*)malloc(k * sizeof(vector_t));
+	for (int i = 0; i < k; i++)
+		centers[i] = clusters[minIndex][i].location;
+	if (rank!=0)
+		MPI_Isend(centers, k, MPI_VECTOR, 0, 0, MPI_COMM_WORLD, &request);
+
+	if (rank == 0)
+	{
+		printf_s("p[0] recived:\n");
+		for (int i = 0; i < numprocs; i++)
+			printf_s("from p[%d] got %lf\n", i, bestResults[i]);
+		minIndex = 0;
+		for (int i = 1; i < numprocs; i++)
+		{
+			if (bestResults[i] < bestResults[minIndex])
+				minIndex = i;
+		}
+		printf_s("time is %lf", bestResults[minIndex]);
+		if (minIndex != 0)
+			MPI_Recv(centers, k, MPI_VECTOR, minIndex, 0, MPI_COMM_WORLD, &status);
+		return centers;
 	}
 }
 
@@ -321,26 +302,25 @@ void Bcast(int rank, int* n, int* k, int* limit, double* qm, double* t, double* 
 	MPI_Bcast(dt, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 	vector_t vector_tmp;
-	MPI_Datatype MPI_Vector;
 	MPI_Datatype MPI_Vector_type[3] = { MPI_DOUBLE, MPI_DOUBLE , MPI_DOUBLE };
 	int vector_blocklen[3] = { 1,1,1 };
 	MPI_Aint MPI_Vector_disp[3] = { (char*)&vector_tmp.x - (char*)&vector_tmp, 
 		(char*)&vector_tmp.y - (char*)&vector_tmp, (char*)&vector_tmp.z - (char*)&vector_tmp };
-	MPI_Type_create_struct(3, vector_blocklen, MPI_Vector_disp, MPI_Vector_type, &MPI_Vector);
-	MPI_Type_commit(&MPI_Vector);
+	MPI_Type_create_struct(3, vector_blocklen, MPI_Vector_disp, MPI_Vector_type, &MPI_VECTOR);
+	MPI_Type_commit(&MPI_VECTOR);
 
 	point_t point_tmp;
-	MPI_Datatype MPI_Point;
-	MPI_Datatype MPI_Point_type[2] = { MPI_Vector, MPI_Vector };
+	MPI_Datatype MPI_POINT;
+	MPI_Datatype MPI_Point_type[2] = { MPI_VECTOR, MPI_VECTOR };
 	int point_blocklen[2] = { 1,1 };
 	MPI_Aint MPI_Point_disp[2] = { (char*)&point_tmp.location - (char*)&point_tmp,
 		(char*)&point_tmp.speed - (char*)&point_tmp };
-	MPI_Type_create_struct(2, point_blocklen, MPI_Point_disp, MPI_Point_type, &MPI_Point);
-	MPI_Type_commit(&MPI_Point);
+	MPI_Type_create_struct(2, point_blocklen, MPI_Point_disp, MPI_Point_type, &MPI_POINT);
+	MPI_Type_commit(&MPI_POINT);
 
 	if (rank != 0)
 		*p = (point_t*)calloc(*n, sizeof(point_t));
-	MPI_Bcast(*p, *n, MPI_Point, 0, MPI_COMM_WORLD);
+	MPI_Bcast(*p, *n, MPI_POINT, 0, MPI_COMM_WORLD);
 }
 
 int main(int argc, char* argv[])
@@ -359,22 +339,20 @@ int main(int argc, char* argv[])
 	point_t* p;
 
 	if (rank == 0)
-	{
 		getDataFromFile(/*argv[1]*/FILE_PATH, &n, &k, &limit, &qm, &t, &dt, &p);
-	}
+	
 	Bcast(rank, &n, &k, &limit, &qm, &t, &dt, &p);
 	printf_s("rank = %d, n = %d, k = %d, limit = %d, qm = %lf, t = %lf, dt = %lf\n", rank, n, k, limit, qm, t, dt);
 	_flushall();
 
-	for (int i = 0; i < n; i++)
-	{
-		p[i].location.x += (rank*dt) * p[i].speed.x;
-		p[i].location.y += (rank*dt) * p[i].speed.y;
-		p[i].location.z += (rank*dt) * p[i].speed.z;
-	}
+	movePoints(p, p, n, rank*dt);
+	//cudaAddPoints(p, p, n, rank*dt);
 
 	double t1 = MPI_Wtime();
-	findFirstGoodCluster(rank, numprocs, n, k, limit, qm, rank*dt, t, numprocs*dt, p);
+	vector_t* centers = findFirstGoodCluster(rank, numprocs, n, k, limit, qm, rank*dt, t, numprocs*dt, p);
+	if (rank == 0)
+		for (int i = 0; i < k; i++)
+			printf_s("\n%d) [%lf,%lf,%lf]", i, centers[i].x, centers[i].y, centers[i].z);
 	double t2 = MPI_Wtime();
 	printf_s("\ntime took to compute: %lf\n", t2 - t1);
 
