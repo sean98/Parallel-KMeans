@@ -11,6 +11,12 @@
     <ClCompile Include="ArrayList.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="KMean.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Cluster.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Header Files">
@@ -28,6 +34,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ArrayList.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="KMean.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

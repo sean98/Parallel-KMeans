@@ -17,6 +17,8 @@ double distance(vector_t v1, vector_t v2);
 
 void addVector(vector_t* v1, vector_t v2);
 
+void atomicAddVector(vector_t* v1, vector_t v2);
+
 void printVector(vector_t v);
 
 int vectorIsEqual(vector_t v1, vector_t v2);

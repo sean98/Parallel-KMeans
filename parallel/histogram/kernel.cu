@@ -1,6 +1,5 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
-#include "device_functions.h"
 #include <omp.h>
 
 #include <stdio.h>
@@ -12,8 +11,6 @@
 
 #define NUM_OF_THREADS 1024
 #define NUM_OF_BLOCKS 1
-
-int __device__ atomicAdd(int* address, int val);
 
 __device__ double atomicAddDouble(double* address, double val)
 {
@@ -208,30 +205,33 @@ cluster_t* CudaKMeans(int n, int k, int limit, point_t h_points[], double* h_qau
 		cudaMemcpy(&h_isSame, d_isSame, sizeof(int), cudaMemcpyDeviceToHost);
 	}
 	cudaMemcpy(h_clusters, d_clusters, k * sizeof(cluster_t), cudaMemcpyDeviceToHost);
-	cudaQuality <<<n / 1024 + 1, 1024 >>>(d_points, d_pointToCluster, d_maxDist, n);
 	cudaMemcpy(h_pointToCluster, d_pointToCluster, n * sizeof(int), cudaMemcpyDeviceToHost);
-	cudaMemcpy(h_maxDist, d_maxDist, n * sizeof(double), cudaMemcpyDeviceToHost);
-	
-	double* radius = (double*)calloc(k, sizeof(double));
+
 	for (int i = 0; i < n; i++)
-	{
-		//printf_s("%lf\n", sqrt(h_maxDist[i]));
-		if (h_maxDist[i] > radius[h_pointToCluster[i]])
-			radius[h_pointToCluster[i]] = h_maxDist[i];
-	}
-	*h_qaulity = 0;
-	for (int i = 0; i < k; i++)
-	{
-		//printf_s("%lf\n", sqrt(radius[i]));
-		for (int j = 0; j < k; j++)
-		{
-			if (i == j)
-				continue;
-			*h_qaulity += sqrt(radius[i]) / sqrt(distance(h_clusters[i].location, h_clusters[j].location));
-		}
-	}
-	*h_qaulity /= k * (k - 1);
-	free(radius);
+		addElement(&h_clusters[h_pointToCluster[i]].pointsList, &h_points[i]);
+	//cudaQuality <<<n / 1024 + 1, 1024 >>>(d_points, d_pointToCluster, d_maxDist, n);
+	//cudaMemcpy(h_maxDist, d_maxDist, n * sizeof(double), cudaMemcpyDeviceToHost);
+	//
+	//double* radius = (double*)calloc(k, sizeof(double));
+	//for (int i = 0; i < n; i++)
+	//{
+	//	//printf_s("%lf\n", sqrt(h_maxDist[i]));
+	//	if (h_maxDist[i] > radius[h_pointToCluster[i]])
+	//		radius[h_pointToCluster[i]] = h_maxDist[i];
+	//}
+	//*h_qaulity = 0;
+	//for (int i = 0; i < k; i++)
+	//{
+	//	//printf_s("%lf\n", sqrt(radius[i]));
+	//	for (int j = 0; j < k; j++)
+	//	{
+	//		if (i == j)
+	//			continue;
+	//		*h_qaulity += sqrt(radius[i]) / sqrt(distance(h_clusters[i].location, h_clusters[j].location));
+	//	}
+	//}
+	//*h_qaulity /= k * (k - 1);
+	//free(radius);
 	free(h_maxDist);
 
 	//maxDist
