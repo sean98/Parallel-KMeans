@@ -1,25 +1,25 @@
-Operating instructions:
+# Operating instructions
 To run the program, you need to run the .exe file through the wmpiexec program with two arguments: the input file, 
 which contains the points, numbers of clusters and more information needed, and the output file where the result will be written. 
 The command should look like this: <exe location> <input file> <output file>.
 
-Project explanation:
+# Project explanation
 The project goal is to implement the kmeans algorithm for finding clusters for points space in an efficient parallel form 
 with mpi+omp+cuda for better calculation time.
 
-MPI:
+## MPI
 With the mpi we perform a static time division, not in an interval division but rather in a more efficient way to 
 create better load balancing. The division is that if there are n processes than p(i) will calculate the 
 times i*dt + n*k*dt where k is 0,1,2… In this way when a process finds good clusters and it will notify about 
 them to all other processes, so they could stop earlier and not run through all options until it finds his time.
 
-OMP:
+## OMP
 With omp we create two threads: one first will activate the cuda calculation (gpu thread),and the second will later 
 be divided into more threads to calculate the algorithm (cpu thread). These two threads divide their work in a dynamic 
 time division, each thread takes his own time to work on. The cpu divide’s his work by running different iteration 
 in for loops on different cores in cpu.
 
-CUDA:
+##  CUDA
 The cuda is doing everything that the cpu does but with much more threads which makes the cuda code much more 
 effective in big sets of points.
 NOTES:
