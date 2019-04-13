@@ -1,5 +1,3 @@
-Sean Goldfarb
-
 Operating instructions:
 To run the program, you need to run the .exe file through the wmpiexec program with two arguments: the input file, 
 which contains the points, numbers of clusters and more information needed, and the output file where the result will be written. 
